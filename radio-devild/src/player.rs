@@ -49,6 +49,17 @@ pub fn run_player(
             .name("uridecodebin")
             .build()
             .expect("failed to create uridecodebin");
+        uridecodebin.connect("source-setup", false, move |args| {
+            if args.len() > 1 {
+                if let Ok(source) = args[1].get::<gstreamer::Element>() {
+                    let _ = source.set_property(
+                        "user-agent",
+                        "Mozilla/5.0 (X11; Linux x86_64) radio-devil/1.0",
+                    );
+                }
+            }
+            None
+        });
         let audioconvert = gstreamer::ElementFactory::make("audioconvert")
             .name("audioconvert")
             .build()
@@ -168,6 +179,7 @@ pub fn run_player(
                         let _ = event_tx.send(PlayerEvent::VolumeChanged(vol));
                     }
                     PlayerCommand::SetUri(uri) => {
+                        tracing::info!("setting URI: {}", uri);
                         let _ = pipeline.set_state(gstreamer::State::Null);
                         uridecodebin.set_property("uri", &uri);
                         let _ = pipeline.set_state(gstreamer::State::Playing);
@@ -197,6 +209,7 @@ pub fn run_player(
                 let pipeline = pipeline.clone();
                 let uridecodebin = uridecodebin.clone();
                 move || {
+                    tracing::info!("setting initial URI: {}", &uri);
                     let _ = pipeline.set_state(gstreamer::State::Null);
                     uridecodebin.set_property("uri", &uri);
                     let _ = pipeline.set_state(gstreamer::State::Playing);

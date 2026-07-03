@@ -11,7 +11,11 @@
     gst_all_1.gst-plugins-good
     gst_all_1.gst-plugins-bad
     gst_all_1.gst-plugins-ugly
+    glib-networking
   ];
+
+  env.GIO_EXTRA_MODULES = "${pkgs.glib-networking}/lib/gio/modules";
+
 
   # https://devenv.sh/languages/
   languages.rust = {
