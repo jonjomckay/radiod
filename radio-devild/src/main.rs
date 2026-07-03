@@ -1,12 +1,17 @@
 use std::str::FromStr;
+use std::time::Duration;
 
+use tokio::sync::watch;
 use tracing_subscriber::EnvFilter;
 
 mod config;
+mod metadata;
+mod orbox;
 mod player;
 mod station;
 
 use player::{PlayerCommand, PlayerEvent};
+use station::StationUri;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,23 +29,115 @@ async fn main() -> anyhow::Result<()> {
     let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<PlayerCommand>();
     let (event_tx, mut event_rx) = tokio::sync::broadcast::channel::<PlayerEvent>(32);
 
-    let initial_uri = cfg
+    let (_station_tx, mut station_rx) = tokio::sync::mpsc::channel::<StationUri>(8);
+
+    let (metadata_tx, _metadata_rx) = watch::channel(metadata::Metadata::default());
+
+    let poll_interval = Duration::from_secs(cfg.daemon.metadata_poll_interval_secs);
+
+    let initial_uri_str = cfg
         .daemon
         .default_station
         .as_ref()
         .and_then(|uri_str| {
             let station = cfg.stations.iter().find(|s| s.uri == *uri_str)?;
-            station::StationUri::from_str(&station.uri).ok().map(|u| u.to_string())
+            StationUri::from_str(&station.uri).ok().map(|u| u.to_string())
         });
 
-    if let Some(ref uri) = initial_uri {
-        tracing::info!("starting with default station: {}", uri);
-    }
+    let mut poll_handle: Option<tokio::task::JoinHandle<()>> = None;
 
-    let player_handle = player::run_player(cmd_rx, event_tx, initial_uri, cfg.daemon.volume);
+    let resolved_initial_uri = if let Some(ref uri_str) = initial_uri_str {
+        let station_uri = StationUri::from_str(uri_str)?;
+        match &station_uri {
+            StationUri::Orbox { country, alias } => {
+                tracing::info!(
+                    "resolving stream URL for orbox:{}/{}",
+                    country,
+                    alias
+                );
+                match orbox::resolve_stream_url(country, alias).await {
+                    Ok(stream_url) => {
+                        tracing::info!(
+                            "starting metadata poller for {}/{} (interval {:?})",
+                            country,
+                            alias,
+                            poll_interval
+                        );
+                        let h = metadata::spawn_metadata_poller(
+                            country.clone(),
+                            alias.clone(),
+                            poll_interval,
+                            metadata_tx.clone(),
+                        );
+                        poll_handle = Some(h);
+                        Some(stream_url)
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "failed to resolve initial station orbox:{}/{}: {}",
+                            country,
+                            alias,
+                            e
+                        );
+                        None
+                    }
+                }
+            }
+            StationUri::Direct { url } => {
+                tracing::info!("playing direct stream: {}", url);
+                Some(url.clone())
+            }
+        }
+    } else {
+        None
+    };
+
+    let player_handle = player::run_player(
+        cmd_rx,
+        event_tx,
+        resolved_initial_uri,
+        cfg.daemon.volume,
+    );
 
     loop {
         tokio::select! {
+            Some(station_uri) = station_rx.recv() => {
+                tracing::info!("station change requested: {}", station_uri);
+
+                if let Some(handle) = poll_handle.take() {
+                    handle.abort();
+                }
+
+                match &station_uri {
+                    StationUri::Orbox { country, alias } => {
+                        match orbox::resolve_stream_url(country, alias).await {
+                            Ok(stream_url) => {
+                                let _ = cmd_tx.send(PlayerCommand::SetUri(stream_url));
+                                let h = metadata::spawn_metadata_poller(
+                                    country.clone(),
+                                    alias.clone(),
+                                    poll_interval,
+                                    metadata_tx.clone(),
+                                );
+                                poll_handle = Some(h);
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "failed to resolve station orbox:{}/{}: {}",
+                                    country,
+                                    alias,
+                                    e
+                                );
+                                // Send stop to player so it doesn't keep playing old stream
+                                let _ = cmd_tx.send(PlayerCommand::Stop);
+                            }
+                        }
+                    }
+                    StationUri::Direct { url } => {
+                        let _ = cmd_tx.send(PlayerCommand::SetUri(url.clone()));
+                    }
+                }
+            }
             event = event_rx.recv() => {
                 match event {
                     Ok(PlayerEvent::StateChanged(state)) => {
@@ -70,6 +167,9 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    if let Some(handle) = poll_handle.take() {
+        handle.abort();
+    }
     let _ = cmd_tx.send(PlayerCommand::Quit);
     player_handle.join().ok();
     tracing::info!("shutdown complete");
