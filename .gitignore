@@ -11,3 +11,6 @@ devenv.local.yaml
 
 # pre-commit
 .pre-commit-config.yaml
+
+# API reference (keep locally, not tracked)
+API.md

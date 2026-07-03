@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="radiod is a lightweight Linux daemon for streaming online radio with MPRIS control. Play, pause, and switch stations from the terminal or your desktop media keys.">
+<meta property="og:title" content="radiod — online radio for Linux">
+<meta property="og:description" content="A lightweight Linux daemon for streaming online radio with MPRIS control.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://jonjomckay.github.io/radiod/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="radiod — online radio for Linux">
+<meta name="twitter:description" content="A lightweight Linux daemon for streaming online radio with MPRIS control.">
+<link rel="canonical" href="https://jonjomckay.github.io/radiod/">
+<title>radiod — online radio for Linux</title>
+<style>
+  :root {
+    --bg: #fdfcf8;
+    --fg: #2c2416;
+    --muted: #6b5e4a;
+    --accent: #b66d0b;
+    --accent-dim: #d48c12;
+    --code-bg: #1e1b15;
+    --code-fg: #e8dcc8;
+    --border: #e6dcc8;
+    --rule: #d4c4a0;
+    --max-w: 44rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1814;
+      --fg: #e6dcc8;
+      --muted: #a69470;
+      --accent: #d48c12;
+      --accent-dim: #b67d1a;
+      --code-bg: #11100d;
+      --code-fg: #e8dcc8;
+      --border: #332d20;
+      --rule: #3d3626;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--fg);
+    background: var(--bg);
+  }
+
+  body {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding: 4rem 1.5rem 3rem;
+  }
+
+  /* ---- header ---- */
+
+  header {
+    text-align: center;
+    padding-bottom: 3rem;
+    margin-bottom: 3rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .icon {
+    display: block;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 1rem;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 2.6rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+    margin-bottom: .35rem;
+  }
+
+  .tagline {
+    font-size: 1.05rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ---- sections ---- */
+
+  section {
+    margin-bottom: 3.5rem;
+  }
+
+  h2 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.45rem;
+    font-weight: 400;
+    color: var(--accent);
+    margin-bottom: .75rem;
+    padding-bottom: .35rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  p { margin-bottom: 1rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---- code ---- */
+
+  code {
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: .85em;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: .15em .4em;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 1rem 1.2rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: .82rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    white-space: pre;
+  }
+
+  /* ---- table ---- */
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: .95rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: .85rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  td:first-child code {
+    background: var(--code-bg);
+  }
+
+  /* ---- callout ---- */
+
+  .callout {
+    background: var(--code-bg);
+    border-left: 3px solid var(--accent);
+    padding: .75rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 1rem;
+    font-size: .92rem;
+    color: var(--muted);
+  }
+
+  .callout strong { color: var(--fg); }
+
+  /* ---- footer ---- */
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-size: .85rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+
+  /* ---- responsive ---- */
+
+  @media (max-width: 500px) {
+    body { padding: 2rem 1rem 2rem; }
+    h1 { font-size: 2rem; }
+    header { padding-bottom: 2rem; margin-bottom: 2rem; }
+    section { margin-bottom: 2.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="12" width="18" height="24" rx="3"/>
+    <line x1="13" y1="36" x2="13" y2="44"/>
+    <line x1="7" y1="44" x2="19" y2="44"/>
+    <path d="M22 32c6 0 10-4 10-10s-4-10-10-10"/>
+    <path d="M22 26c3 0 5-2 5-4s-2-4-5-4"/>
+    <circle cx="38" cy="16" r="2"/>
+    <circle cx="38" cy="22" r="4" opacity=".4"/>
+    <circle cx="38" cy="28" r="2" opacity=".2"/>
+  </svg>
+  <h1>radiod</h1>
+  <p class="tagline">Stream online radio on Linux, with MPRIS control.</p>
+</header>
+
+<section>
+  <h2>What is it?</h2>
+  <p>
+    <strong>radiod</strong> is a lightweight background daemon that streams
+    online radio stations on Linux. It speaks
+    <a href="https://specifications.freedesktop.org/mpris-spec/latest/">MPRIS</a>,
+    so your desktop media keys, KDE Connect, and
+    <a href="https://github.com/altdesktop/playerctl">playerctl</a> all work
+    out of the box. A companion CLI tool lets you control playback from the
+    terminal.
+  </p>
+  <p>
+    Stations are defined in a simple TOML config file. You can use the
+    <code>orbox:</code> scheme to pull stream URLs from the
+    <a href="https://onlineradiobox.com">Online Radio Box</a> directory, or
+    <code>direct:</code> to point at any stream URL you like.
+  </p>
+</section>
+
+<section>
+  <h2>Requirements</h2>
+  <p>These packages are required before radiod will run:</p>
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>gstreamer</code></td><td>Core multimedia framework</td></tr>
+      <tr><td><code>gst-plugins-base</code></td><td>Basic codecs and elements</td></tr>
+      <tr><td><code>gst-plugins-good</code></td><td>MP3, AAC, FLAC, PulseAudio</td></tr>
+      <tr><td><code>gst-plugins-bad</code></td><td>HLS, DASH, HTTP live streaming</td></tr>
+      <tr><td><code>gst-plugins-ugly</code></td><td>Additional codec support</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Install</h2>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/jonjomckay/radiod/main/install.sh | bash</code></pre>
+  <p>Or clone and install manually:</p>
+  <pre><code>git clone https://github.com/jonjomckay/radiod.git
+cd radiod
+./install.sh              # latest release
+./install.sh v0.1.0       # specific version
+./install.sh --build      # build from source</code></pre>
+</section>
+
+<section>
+  <h2>Configuration</h2>
+  <p>Create <code>~/.config/radiod/config.toml</code>:</p>
+  <pre><code>[[stations]]
+name = "BBC Radio 1"
+uri = "orbox:uk/bbcradio1"
+
+[[stations]]
+name = "BBC Radio 2"
+uri = "orbox:uk/bbcradio2"
+
+[[stations]]
+name = "My Direct Stream"
+uri = "direct:https://example.com/stream.mp3"
+
+[daemon]
+volume = 0.8
+default_station = "orbox:uk/bbcradio1"
+metadata_poll_interval_secs = 30</code></pre>
+
+  <p>A commented example lives at <code>config.example.toml</code> in the repo.</p>
+
+  <h2 style="margin-top:1.5rem">Station URIs</h2>
+  <table>
+    <thead>
+      <tr><th>Scheme</th><th>Format</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>orbox:</code></td>
+        <td><code>orbox:&lt;country&gt;/&lt;alias&gt;</code></td>
+        <td>Resolved to a stream URL via the Online Radio Box API</td>
+      </tr>
+      <tr>
+        <td><code>direct:</code></td>
+        <td><code>direct:&lt;url&gt;</code></td>
+        <td>Passed directly to GStreamer</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Usage</h2>
+  <p>Start and enable the daemon:</p>
+  <pre><code>systemctl --user enable --now radiod</code></pre>
+  <p>Control playback:</p>
+  <pre><code>radiod-ctl play
+radiod-ctl pause
+radiod-ctl next          # next station
+radiod-ctl previous      # previous station
+radiod-ctl now-playing   # show current track
+radiod-ctl list-stations # list configured stations
+radiod-ctl stop
+radiod-ctl volume 0.8           # set volume (0.0–1.0)
+radiod-ctl set-station &lt;uri&gt;    # switch to station by URI
+radiod-ctl status               # playback status summary
+radiod-ctl reload               # reload config from disk
+radiod-ctl info                 # full MPRIS properties dump</code></pre>
+  <p>View logs:</p>
+  <pre><code>journalctl --user -u radiod -f</code></pre>
+  <p>
+    Desktop media controls, KDE Connect, and
+    <code>playerctl</code> will discover radiod automatically via MPRIS.
+  </p>
+</section>
+
+<section>
+  <h2>Uninstall</h2>
+  <pre><code>systemctl --user disable --now radiod
+rm ~/.local/bin/radiod
+rm ~/.local/bin/radiod-ctl
+rm ${XDG_CONFIG_HOME:-~/.config}/systemd/user/radiod.service
+rm ${XDG_DATA_HOME:-~/.local/share}/applications/radiod.desktop
+rm ${XDG_DATA_HOME:-~/.local/share}/icons/hicolor/scalable/apps/radiod.svg
+systemctl --user daemon-reload</code></pre>
+  <p>
+    Config and data directories (<code>${XDG_CONFIG_HOME:-~/.config}/radiod</code>,
+    <code>${XDG_DATA_HOME:-~/.local/share}/radiod</code>) can be removed manually if you like.
+  </p>
+</section>
+
+<footer>
+  <span><a href="https://github.com/jonjomckay/radiod">GitHub</a></span>
+  <span>MIT License</span>
+</footer>
+
+</body>
+</html>

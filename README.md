@@ -68,8 +68,13 @@ radiod-ctl pause
 radiod-ctl next          # next station
 radiod-ctl previous      # previous station
 radiod-ctl now-playing   # show current track
-radiod-ctl stations      # list configured stations
+radiod-ctl list-stations # list configured stations
 radiod-ctl stop
+radiod-ctl volume 0.8           # set volume (0.0–1.0)
+radiod-ctl set-station <uri>    # switch to station by URI
+radiod-ctl status               # playback status summary
+radiod-ctl reload               # reload config from disk
+radiod-ctl info                 # full MPRIS properties dump
 ```
 
 View logs:
