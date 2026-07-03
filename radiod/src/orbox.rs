@@ -19,35 +19,40 @@ pub async fn resolve_stream_url(country: &str, alias: &str) -> anyhow::Result<St
         "https://onlineradiobox.com/json/{}/{}/widget/",
         country, alias
     );
+    let country = country.to_string();
+    let alias = alias.to_string();
 
-    let response = reqwest::get(&url)
-        .await
-        .context("failed to fetch stream URL from Online Radio Box")?;
+    tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+        let mut response = ureq::get(&url)
+            .call()
+            .context("failed to fetch stream URL from Online Radio Box")?;
 
-    let status = response.status();
-    if !status.is_success() {
-        anyhow::bail!(
-            "Online Radio Box API returned {} for station {}/{}",
-            status,
-            country,
-            alias
-        );
-    }
+        let status = response.status();
+        if !status.is_success() {
+            anyhow::bail!(
+                "Online Radio Box API returned {} for station {}/{}",
+                status,
+                country,
+                alias
+            );
+        }
 
-    let widget: WidgetResponse = response
-        .json()
-        .await
-        .context("failed to parse widget JSON response")?;
+        let widget: WidgetResponse = response
+            .body_mut()
+            .read_json()
+            .context("failed to parse widget JSON response")?;
 
-    if widget.is_geo_blocked {
-        anyhow::bail!("station {}/{} is geo-blocked", country, alias);
-    }
+        if widget.is_geo_blocked {
+            anyhow::bail!("station {}/{} is geo-blocked", country, alias);
+        }
 
-    if widget.stream_url.is_empty() {
-        anyhow::bail!("empty stream URL for station {}/{}", country, alias);
-    }
+        if widget.stream_url.is_empty() {
+            anyhow::bail!("empty stream URL for station {}/{}", country, alias);
+        }
 
-    Ok(widget.stream_url)
+        Ok(widget.stream_url)
+    })
+    .await?
 }
 
 #[cfg(test)]

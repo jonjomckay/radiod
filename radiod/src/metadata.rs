@@ -55,19 +55,27 @@ fn parse_metadata(response: ScraperResponse) -> Metadata {
 
 pub async fn fetch_metadata(country: &str, alias: &str) -> anyhow::Result<Metadata> {
     let url = format!("http://scraper.onlineradiobox.com/{}.{}", country, alias);
-    let response = reqwest::get(&url)
-        .await
-        .context("failed to fetch now-playing metadata")?;
+    let country = country.to_string();
+    let alias = alias.to_string();
 
-    let status = response.status();
-    if !status.is_success() {
-        anyhow::bail!("scraper returned {} for {}.{}", status, country, alias);
-    }
+    let scraper: ScraperResponse = tokio::task::spawn_blocking(move || -> anyhow::Result<ScraperResponse> {
+        let mut response = ureq::get(&url)
+            .call()
+            .context("failed to fetch now-playing metadata")?;
 
-    let scraper: ScraperResponse = response
-        .json()
-        .await
-        .context("failed to parse scraper JSON response")?;
+        let status = response.status();
+        if !status.is_success() {
+            anyhow::bail!("scraper returned {} for {}.{}", status, country, alias);
+        }
+
+        let scraper: ScraperResponse = response
+            .body_mut()
+            .read_json()
+            .context("failed to parse scraper JSON response")?;
+
+        Ok(scraper)
+    })
+    .await??;
 
     Ok(parse_metadata(scraper))
 }
