@@ -9,6 +9,7 @@ mod metadata;
 mod orbox;
 mod player;
 mod station;
+mod mpris;
 
 use player::{PlayerCommand, PlayerEvent};
 use station::StationUri;
@@ -29,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<PlayerCommand>();
     let (event_tx, mut event_rx) = tokio::sync::broadcast::channel::<PlayerEvent>(32);
 
-    let (_station_tx, mut station_rx) = tokio::sync::mpsc::channel::<StationUri>(8);
+    let (station_tx, mut station_rx) = tokio::sync::mpsc::channel::<StationUri>(8);
 
     let (metadata_tx, _metadata_rx) = watch::channel(metadata::Metadata::default());
 
@@ -92,12 +93,42 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    let event_tx_for_mpris = event_tx.clone();
+
     let player_handle = player::run_player(
         cmd_rx,
         event_tx,
         resolved_initial_uri,
         cfg.daemon.volume,
     );
+
+    let (quit_tx, mut quit_rx) = watch::channel(false);
+
+    let mut mpris_handle = {
+        let cmd_tx = cmd_tx.clone();
+        let event_tx = event_tx_for_mpris;
+        let metadata_tx = metadata_tx.clone();
+        let station_tx = station_tx;
+        let stations = cfg.stations.clone();
+        let initial_volume = cfg.daemon.volume;
+        let initial_uri = initial_uri_str.clone();
+        tokio::spawn(async move {
+            if let Err(e) = mpris::run_mpris(
+                cmd_tx,
+                event_tx,
+                metadata_tx,
+                station_tx,
+                stations,
+                initial_volume,
+                initial_uri,
+                quit_tx,
+            )
+            .await
+            {
+                tracing::warn!("mpris error: {}", e);
+            }
+        })
+    };
 
     loop {
         tokio::select! {
@@ -159,6 +190,13 @@ async fn main() -> anyhow::Result<()> {
                         break;
                     }
                 }
+            }
+            _ = quit_rx.changed() => {
+                tracing::info!("received quit from MPRIS");
+                break;
+            }
+            _ = &mut mpris_handle => {
+                tracing::debug!("mpris task exited");
             }
             _ = tokio::signal::ctrl_c() => {
                 tracing::info!("received Ctrl+C, shutting down...");
