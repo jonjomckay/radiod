@@ -2,10 +2,13 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU32, Ordering}};
 
+use anyhow::Context;
+
 use tokio::sync::watch;
 use tracing_subscriber::EnvFilter;
 
 mod config;
+mod config_watcher;
 mod control;
 mod metadata;
 mod orbox;
@@ -155,6 +158,11 @@ async fn main() -> anyhow::Result<()> {
 
     let (quit_tx, mut quit_rx) = watch::channel(false);
 
+    let config_reload_rx = {
+        let path = config::config_path().context("could not determine config path")?;
+        config_watcher::spawn(path)
+    };
+
     let mut mpris_handle = {
         let cmd_tx = cmd_tx.clone();
         let event_tx = event_tx_for_mpris;
@@ -173,6 +181,7 @@ async fn main() -> anyhow::Result<()> {
                 initial_volume,
                 initial_uri,
                 quit_tx,
+                config_reload_rx,
             )
             .await
             {

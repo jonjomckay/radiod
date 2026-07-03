@@ -361,6 +361,7 @@ pub async fn run_mpris(
     initial_volume: f64,
     initial_station_uri: Option<String>,
     quit_tx: watch::Sender<bool>,
+    mut config_reload_rx: tokio::sync::mpsc::Receiver<anyhow::Result<crate::config::Config>>,
 ) -> anyhow::Result<()> {
     let mut quit_rx = quit_tx.subscribe();
     let quit_tx = Arc::new(quit_tx);
@@ -393,6 +394,8 @@ pub async fn run_mpris(
         quit_tx: quit_tx.clone(),
     };
 
+    let station_tx_for_reload = station_tx.clone();
+    let cmd_tx_for_reload = cmd_tx.clone();
     let station_tx_for_player = station_tx.clone();
     let media_player2_player = MediaPlayer2Player {
         state: state.clone(),
@@ -466,6 +469,65 @@ pub async fn run_mpris(
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
+
+            result = config_reload_rx.recv() => {
+                match result {
+                    Some(Err(e)) => {
+                        tracing::error!("config reload failed: {:#}", e);
+                    }
+                    Some(Ok(new_config)) => {
+                        let switch_to: Option<StationUri> = {
+                            let mut state = state.write().await;
+                            let old_uri = state.current_station_uri.clone();
+                            state.stations = new_config.stations;
+                            state.volume = new_config.daemon.volume;
+
+                            let still_exists = state.stations.iter().any(|s| s.uri == old_uri);
+                            if still_exists {
+                                if let Some(idx) = state.stations.iter().position(|s| s.uri == old_uri) {
+                                    state.current_station_index = idx;
+                                }
+                                None
+                            } else if state.stations.is_empty() {
+                                state.current_station_uri.clear();
+                                state.current_station_index = 0;
+                                drop(state);
+                                let _ = cmd_tx_for_reload.send(PlayerCommand::Stop);
+                                tracing::warn!(
+                                    "config reload: current station removed, stopping playback"
+                                );
+                                None
+                            } else {
+                                let new_uri = state.stations[0].uri.clone();
+                                state.current_station_index = 0;
+                                state.current_station_uri.clone_from(&new_uri);
+                                let _ = state.station_changed_tx.send(new_uri.clone());
+                                StationUri::from_str(&new_uri).ok()
+                            }
+                        };
+
+                        // Update volume regardless of station changes
+                        let _ = cmd_tx_for_reload.send(PlayerCommand::SetVolume(
+                            new_config.daemon.volume,
+                        ));
+
+                        // Switch station if needed (must happen outside lock for async .send)
+                        if let Some(uri) = switch_to {
+                            let _ = station_tx_for_reload.send(uri).await;
+                        }
+
+                        // Emit D-Bus PropertiesChanged for Stations
+                        emit_control_prop_changed(&object_server, "Stations").await;
+
+                        let count = state.read().await.stations.len();
+                        tracing::info!("config reloaded successfully ({} stations)", count);
+                    }
+                    None => {
+                        // Channel closed, watcher exited
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -490,6 +552,25 @@ async fn emit_player_prop_changed(
         "PlaybackStatus" => iface_ref.get().await.playback_status_changed(emitter).await,
         "Volume" => iface_ref.get().await.volume_changed(emitter).await,
         "Metadata" => iface_ref.get_mut().await.metadata_changed(emitter).await,
+        _ => Ok(()),
+    };
+}
+
+/// Emit a PropertiesChanged signal for the named property on the Control
+/// interface.
+async fn emit_control_prop_changed(
+    object_server: &impl std::ops::Deref<Target = zbus::object_server::ObjectServer>,
+    property: &str,
+) {
+    let Ok(iface_ref) = object_server
+        .interface::<_, crate::control::Control>("/org/mpris/MediaPlayer2")
+        .await
+    else {
+        return;
+    };
+    let emitter = iface_ref.signal_context();
+    let _ = match property {
+        "Stations" => iface_ref.get().await.stations_changed(emitter).await,
         _ => Ok(()),
     };
 }
