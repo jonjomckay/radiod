@@ -1,0 +1,23 @@
+[Unit]
+Description=Radio Devil - Internet Radio Daemon
+After=network-online.target sound.target
+Wants=network-online.target sound.target
+
+[Service]
+Type=simple
+ExecStart=radio-devild
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/radio-devil
+ReadWritePaths=%h/.local/share/radio-devil
+ReadWritePaths=%h/.cache
+ReadOnlyPaths=/usr/lib
+ReadOnlyPaths=/usr/share
+
+[Install]
+WantedBy=default.target

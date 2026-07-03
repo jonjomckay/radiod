@@ -1,0 +1,18 @@
+# Copy to ~/.config/radio-devil/config.toml
+
+[daemon]
+volume = 0.8
+# default_station = "orbox:uk/bbcradio1"
+metadata_poll_interval_secs = 30
+
+[[stations]]
+name = "BBC Radio 1"
+uri = "orbox:uk/bbcradio1"
+
+# [[stations]]
+# name = "BBC Radio 1 Dance"
+# uri = "orbox:uk/bbcdance"
+
+# [[stations]]
+# name = "My Direct Stream"
+# uri = "direct:https://example.com/stream.mp3"

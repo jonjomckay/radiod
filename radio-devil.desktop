@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Radio Devil
+Comment=Internet Radio Daemon
+Exec=radio-devild
+Icon=radio-devil
+Categories=AudioVideo;Player;
+NoDisplay=true
+StartupNotify=false
+X-systemd-skip-watch=true
