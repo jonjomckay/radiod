@@ -55,18 +55,38 @@ install_binaries() {
 install_files() {
     mkdir -p "$SERVICE_DIR" "$DESKTOP_DIR" "$ICON_DIR"
 
-    cp "${SCRIPT_DIR}/radiod.service" "$SERVICE_DIR/"
+    local raw="https://raw.githubusercontent.com/${REPO}/main/radiod.service"
+    if [ -f "${SCRIPT_DIR}/radiod.service" ]; then
+        cp "${SCRIPT_DIR}/radiod.service" "$SERVICE_DIR/"
+    else
+        curl -fsSL "${raw}" -o "${SERVICE_DIR}/radiod.service"
+    fi
     echo "Installed ${SERVICE_DIR}/radiod.service"
 
-    cp "${SCRIPT_DIR}/radiod.desktop" "$DESKTOP_DIR/"
+    raw="https://raw.githubusercontent.com/${REPO}/main/radiod.desktop"
+    if [ -f "${SCRIPT_DIR}/radiod.desktop" ]; then
+        cp "${SCRIPT_DIR}/radiod.desktop" "$DESKTOP_DIR/"
+    else
+        curl -fsSL "${raw}" -o "${DESKTOP_DIR}/radiod.desktop"
+    fi
     echo "Installed ${DESKTOP_DIR}/radiod.desktop"
 
-    cp "${SCRIPT_DIR}/assets/radiod.svg" "$ICON_DIR/"
+    raw="https://raw.githubusercontent.com/${REPO}/main/assets/radiod.svg"
+    if [ -f "${SCRIPT_DIR}/assets/radiod.svg" ]; then
+        cp "${SCRIPT_DIR}/assets/radiod.svg" "$ICON_DIR/"
+    else
+        curl -fsSL "${raw}" -o "${ICON_DIR}/radiod.svg"
+    fi
     echo "Installed ${ICON_DIR}/radiod.svg"
 
     if [ ! -f "$CONFIG_DIR/config.toml" ]; then
         mkdir -p "$CONFIG_DIR"
-        cp "${SCRIPT_DIR}/config.example.toml" "$CONFIG_DIR/config.toml"
+        raw="https://raw.githubusercontent.com/${REPO}/main/config.example.toml"
+        if [ -f "${SCRIPT_DIR}/config.example.toml" ]; then
+            cp "${SCRIPT_DIR}/config.example.toml" "$CONFIG_DIR/config.toml"
+        else
+            curl -fsSL "${raw}" -o "$CONFIG_DIR/config.toml"
+        fi
         echo "Installed example config to ${CONFIG_DIR}/config.toml"
     else
         echo "Config already exists at ${CONFIG_DIR}/config.toml (skipped)"
