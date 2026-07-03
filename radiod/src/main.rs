@@ -75,8 +75,6 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cfg = config::load_config()?;
-    let data_dir = config::ensure_data_dir()?;
-    tracing::info!("data directory: {}", data_dir.display());
 
     let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<PlayerCommand>();
     let (event_tx, mut event_rx) = tokio::sync::broadcast::channel::<PlayerEvent>(32);
