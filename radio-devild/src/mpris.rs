@@ -13,13 +13,14 @@ use crate::metadata::Metadata;
 use crate::player::{PlaybackState, PlayerCommand, PlayerEvent};
 use crate::station::StationUri;
 
-struct MprisState {
-    playback_status: PlaybackState,
-    volume: f64,
-    metadata: Metadata,
-    stations: Vec<StationConfig>,
-    current_station_index: usize,
-    current_station_uri: String,
+pub(crate) struct MprisState {
+    pub(crate) playback_status: PlaybackState,
+    pub(crate) volume: f64,
+    pub(crate) metadata: Metadata,
+    pub(crate) stations: Vec<StationConfig>,
+    pub(crate) current_station_index: usize,
+    pub(crate) current_station_uri: String,
+    pub(crate) station_changed_tx: broadcast::Sender<String>,
 }
 
 struct MediaPlayer2 {
@@ -274,6 +275,8 @@ async fn notify_station_change(
     let station = &state.stations[state.current_station_index];
     state.current_station_uri.clone_from(&station.uri);
 
+    let _ = state.station_changed_tx.send(station.uri.clone());
+
     match StationUri::from_str(&station.uri) {
         Ok(station_uri) => {
             tracing::info!("mpris station change: {}", station_uri);
@@ -362,6 +365,8 @@ pub async fn run_mpris(
     let mut quit_rx = quit_tx.subscribe();
     let quit_tx = Arc::new(quit_tx);
 
+    let (station_changed_tx, mut station_changed_rx) = broadcast::channel::<String>(16);
+
     let initial_current_station_uri = initial_station_uri.clone().unwrap_or_default();
     let initial_playback = initial_station_uri
         .as_ref()
@@ -381,15 +386,22 @@ pub async fn run_mpris(
         stations,
         current_station_index: initial_station_index,
         current_station_uri: initial_current_station_uri,
+        station_changed_tx,
     }));
 
     let media_player2 = MediaPlayer2 {
         quit_tx: quit_tx.clone(),
     };
 
+    let station_tx_for_player = station_tx.clone();
     let media_player2_player = MediaPlayer2Player {
         state: state.clone(),
         cmd_tx,
+        station_tx: station_tx_for_player,
+    };
+
+    let control = crate::control::Control {
+        state: state.clone(),
         station_tx,
     };
 
@@ -397,6 +409,7 @@ pub async fn run_mpris(
         .name("org.mpris.MediaPlayer2.radio_devil")?
         .serve_at("/org/mpris/MediaPlayer2", media_player2)?
         .serve_at("/org/mpris/MediaPlayer2", media_player2_player)?
+        .serve_at("/org/mpris/MediaPlayer2", control)?
         .build()
         .await?;
 
@@ -434,6 +447,24 @@ pub async fn run_mpris(
                 let meta = metadata_rx.borrow_and_update().clone();
                 state.write().await.metadata = meta;
                 emit_player_prop_changed(&object_server, "Metadata").await;
+            }
+
+            event = station_changed_rx.recv() => {
+                match event {
+                    Ok(new_uri) => {
+                        let _: Result<(), zbus::Error> = conn.emit_signal(
+                            None::<&str>,
+                            "/org/mpris/MediaPlayer2",
+                            "org.mpris.MediaPlayer2.radio_devil.Control",
+                            "StationChanged",
+                            &(new_uri,),
+                        ).await;
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!("station changed receiver lagged by {} messages", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
             }
         }
     }

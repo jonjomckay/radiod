@@ -6,6 +6,7 @@ use tokio::sync::watch;
 use tracing_subscriber::EnvFilter;
 
 mod config;
+mod control;
 mod metadata;
 mod orbox;
 mod player;
