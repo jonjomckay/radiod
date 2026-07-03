@@ -1,4 +1,4 @@
-# Copy to ~/.config/radio-devil/config.toml
+# Copy to ~/.config/radiod/config.toml
 
 [daemon]
 volume = 0.8

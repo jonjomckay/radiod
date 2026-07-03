@@ -52,10 +52,8 @@ pub fn run_player(
         uridecodebin.connect("source-setup", false, move |args| {
             if args.len() > 1 {
                 if let Ok(source) = args[1].get::<gstreamer::Element>() {
-                    let _ = source.set_property(
-                        "user-agent",
-                        "Mozilla/5.0 (X11; Linux x86_64) radio-devil/1.0",
-                    );
+                    let _ = source
+                        .set_property("user-agent", "Mozilla/5.0 (X11; Linux x86_64) radiod/1.0");
                 }
             }
             None

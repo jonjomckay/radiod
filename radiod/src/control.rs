@@ -14,7 +14,7 @@ pub struct Control {
     pub station_tx: tokio::sync::mpsc::Sender<StationUri>,
 }
 
-#[interface(name = "org.mpris.MediaPlayer2.radio_devil.Control")]
+#[interface(name = "org.mpris.MediaPlayer2.radiod.Control")]
 impl Control {
     #[zbus(signal)]
     async fn station_changed(

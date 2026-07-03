@@ -37,11 +37,11 @@ pub struct Config {
 }
 
 pub fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("radio-devil").join("config.toml"))
+    dirs::config_dir().map(|d| d.join("radiod").join("config.toml"))
 }
 
 pub fn data_dir() -> Option<PathBuf> {
-    dirs::data_dir().map(|d| d.join("radio-devil"))
+    dirs::data_dir().map(|d| d.join("radiod"))
 }
 
 pub fn load_config() -> anyhow::Result<Config> {

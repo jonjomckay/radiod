@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Radio Devil
+Name=radiod
 Comment=Internet Radio Daemon
-Exec=radio-devild
-Icon=radio-devil
+Exec=radiod
+Icon=radiod
 Categories=AudioVideo;Player;
 NoDisplay=true
 StartupNotify=false

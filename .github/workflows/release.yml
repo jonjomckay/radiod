@@ -21,5 +21,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/release/radio-devild
-            target/release/radio-devil-ctl
+            target/release/radiod
+            target/release/radiod-ctl

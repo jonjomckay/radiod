@@ -6,13 +6,13 @@ use zbus::blocking::{fdo::PropertiesProxy, Connection};
 use zbus::names::InterfaceName;
 use zbus::zvariant::OwnedValue;
 
-const DEST: &str = "org.mpris.MediaPlayer2.radio_devil";
+const DEST: &str = "org.mpris.MediaPlayer2.radiod";
 const PATH: &str = "/org/mpris/MediaPlayer2";
 const PLAYER_IFACE: &str = "org.mpris.MediaPlayer2.Player";
-const CONTROL_IFACE: &str = "org.mpris.MediaPlayer2.radio_devil.Control";
+const CONTROL_IFACE: &str = "org.mpris.MediaPlayer2.radiod.Control";
 
 #[derive(Parser)]
-#[command(name = "radio-devil-ctl", about = "Control the Radio Devil daemon")]
+#[command(name = "radiod-ctl", about = "Control the radiod daemon")]
 enum Cli {
     /// Resume playback
     Play,
@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
 
 fn connect() -> anyhow::Result<Connection> {
     Connection::session().context(
-        "Radio Devil daemon is not running. Start it with `systemctl --user start radio-devil`.",
+        "radiod daemon is not running. Start it with `systemctl --user start radiod`.",
     )
 }
 
@@ -296,8 +296,8 @@ fn cmd_info(conn: &Connection, player_iface: &InterfaceName<'_>) -> anyhow::Resu
     let stations: Vec<(String, String)> = reply.body().deserialize().unwrap_or_default();
 
     let mut lines: Vec<String> = Vec::new();
-    lines.push(format!("Identity:       {}", "Radio Devil"));
-    lines.push(format!("DesktopEntry:   {}", "radio-devil"));
+    lines.push(format!("Identity:       {}", "radiod"));
+    lines.push(format!("DesktopEntry:   {}", "radiod"));
     lines.push(format!("PlaybackStatus: {}", status));
     lines.push(format!("LoopStatus:     {}", loop_status));
     lines.push(format!("Rate:           {}", rate));

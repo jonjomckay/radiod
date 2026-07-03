@@ -1,18 +1,18 @@
-# Radio Devil
+# radiod
 
 A Rust daemon for streaming online radio with MPRIS control.
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jonjomckay/radio-devil/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jonjomckay/radiod/main/install.sh | bash
 ```
 
 Or clone and run manually:
 
 ```bash
-git clone https://github.com/jonjomckay/radio-devil.git
-cd radio-devil
+git clone https://github.com/jonjomckay/radiod.git
+cd radiod
 ./install.sh             # latest release
 ./install.sh v0.1.0      # specific version
 ./install.sh --build     # build from source
@@ -22,7 +22,7 @@ cd radio-devil
 
 ## Configuration
 
-Create `$XDG_CONFIG_HOME/radio-devil/config.toml` (usually `~/.config/radio-devil/config.toml`):
+Create `$XDG_CONFIG_HOME/radiod/config.toml` (usually `~/.config/radiod/config.toml`):
 
 ```toml
 [[stations]]
@@ -57,25 +57,25 @@ A commented example is at `config.example.toml` in the repo.
 Start and enable the daemon:
 
 ```bash
-systemctl --user enable --now radio-devil
+systemctl --user enable --now radiod
 ```
 
 Control playback:
 
 ```bash
-radio-devil-ctl play
-radio-devil-ctl pause
-radio-devil-ctl next          # next station
-radio-devil-ctl previous      # previous station
-radio-devil-ctl now-playing   # show current track
-radio-devil-ctl stations      # list configured stations
-radio-devil-ctl stop
+radiod-ctl play
+radiod-ctl pause
+radiod-ctl next          # next station
+radiod-ctl previous      # previous station
+radiod-ctl now-playing   # show current track
+radiod-ctl stations      # list configured stations
+radiod-ctl stop
 ```
 
 View logs:
 
 ```bash
-journalctl --user -u radio-devil -f
+journalctl --user -u radiod -f
 ```
 
 Media players (e.g. KDE Connect, playerctl) discover the daemon via MPRIS.
@@ -85,29 +85,29 @@ Media players (e.g. KDE Connect, playerctl) discover the daemon via MPRIS.
 ```bash
 devenv shell     # enter dev environment
 cargo build
-cargo run -p radio-devild
+cargo run -p radiod
 ```
 
 ## Uninstall
 
 ```bash
-systemctl --user disable --now radio-devil
-rm ~/.local/bin/radio-devild
-rm ~/.local/bin/radio-devil-ctl
-rm ~/.config/systemd/user/radio-devil.service
-rm ~/.local/share/applications/radio-devil.desktop
-rm ~/.local/share/icons/hicolor/scalable/apps/radio-devil.svg
+systemctl --user disable --now radiod
+rm ~/.local/bin/radiod
+rm ~/.local/bin/radiod-ctl
+rm ~/.config/systemd/user/radiod.service
+rm ~/.local/share/applications/radiod.desktop
+rm ~/.local/share/icons/hicolor/scalable/apps/radiod.svg
 systemctl --user daemon-reload
 ```
 
-Config and data directories (`~/.config/radio-devil`, `~/.local/share/radio-devil`) can be removed manually.
+Config and data directories (`~/.config/radiod`, `~/.local/share/radiod`) can be removed manually.
 
 ## Project Structure
 
 | Crate | Description |
 |-------|-------------|
-| `radio-devild` | GStreamer-based audio daemon |
-| `radio-devil-ctl` | CLI control tool (stub) |
+| `radiod` | GStreamer-based audio daemon |
+| `radiod-ctl` | CLI control tool |
 
 ## License
 

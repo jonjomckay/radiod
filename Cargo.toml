@@ -1,5 +1,5 @@
 [workspace]
-members = ["radio-devild", "radio-devil-ctl"]
+members = ["radiod", "radiod-ctl"]
 resolver = "2"
 
 [workspace.package]

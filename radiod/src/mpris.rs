@@ -41,12 +41,12 @@ struct MediaPlayer2Player {
 impl MediaPlayer2 {
     #[zbus(property)]
     async fn identity(&self) -> &str {
-        "Radio Devil"
+        "radiod"
     }
 
     #[zbus(property)]
     async fn desktop_entry(&self) -> &str {
-        "radio-devil"
+        "radiod"
     }
 
     #[zbus(property)]
@@ -304,7 +304,7 @@ fn make_track_id(station_uri: &str, track_id: &str) -> String {
         track_id.to_string()
     };
     format!(
-        "/org/mpris/MediaPlayer2/radio_devil/track/{}_{}",
+        "/org/mpris/MediaPlayer2/radiod/track/{}_{}",
         station_part, ts
     )
 }
@@ -317,7 +317,7 @@ fn make_metadata_dict(meta: &Metadata, station_uri: &str) -> HashMap<String, Val
     let obj_path = ObjectPath::try_from(track_id_path)
         .unwrap_or_else(|_| {
             ObjectPath::from_string_unchecked(
-                "/org/mpris/MediaPlayer2/radio_devil/track/unknown".to_string(),
+                "/org/mpris/MediaPlayer2/radiod/track/unknown".to_string(),
             )
         });
     map.insert("mpris:trackid".to_string(), Value::ObjectPath(obj_path));
@@ -409,7 +409,7 @@ pub async fn run_mpris(
     };
 
     let conn = connection::Builder::session()?
-        .name("org.mpris.MediaPlayer2.radio_devil")?
+        .name("org.mpris.MediaPlayer2.radiod")?
         .serve_at("/org/mpris/MediaPlayer2", media_player2)?
         .serve_at("/org/mpris/MediaPlayer2", media_player2_player)?
         .serve_at("/org/mpris/MediaPlayer2", control)?
@@ -458,7 +458,7 @@ pub async fn run_mpris(
                         let _: Result<(), zbus::Error> = conn.emit_signal(
                             None::<&str>,
                             "/org/mpris/MediaPlayer2",
-                            "org.mpris.MediaPlayer2.radio_devil.Control",
+                            "org.mpris.MediaPlayer2.radiod.Control",
                             "StationChanged",
                             &(new_uri,),
                         ).await;

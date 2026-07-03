@@ -1,5 +1,5 @@
 [package]
-name = "radio-devil-ctl"
+name = "radiod-ctl"
 version = "0.1.0"
 edition = "2021"
 

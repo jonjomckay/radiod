@@ -1408,17 +1408,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
-name = "radio-devil-ctl"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "serde",
- "zbus",
-]
-
-[[package]]
-name = "radio-devild"
+name = "radiod"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1433,6 +1423,16 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
+name = "radiod-ctl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
  "zbus",
 ]
 

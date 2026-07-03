@@ -1,5 +1,5 @@
 [package]
-name = "radio-devild"
+name = "radiod"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
