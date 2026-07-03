@@ -5,7 +5,7 @@ Wants=network-online.target sound.target
 
 [Service]
 Type=simple
-ExecStart=radiod
+ExecStart=%h/.local/bin/radiod
 Restart=on-failure
 RestartSec=5
 
