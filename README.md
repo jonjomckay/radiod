@@ -1,6 +1,6 @@
 # Radio Devil
 
-A Rust daemon for streaming online radio with MPRIS control and Last.fm scrobbling.
+A Rust daemon for streaming online radio with MPRIS control.
 
 ## Quick Start
 
@@ -17,13 +17,6 @@ cargo build
 Create `$XDG_CONFIG_HOME/radio-devil/config.toml` (usually `~/.config/radio-devil/config.toml`):
 
 ```toml
-[lastfm]
-api_key = "your_api_key_here"
-secret = "your_shared_secret_here"
-username = "your_lastfm_username"
-# password is optional — omit for API-key-only sessions
-# password = "your_lastfm_password"
-
 [[stations]]
 name = "BBC Radio 1"
 uri = "orbox:uk/bbcradio1"
