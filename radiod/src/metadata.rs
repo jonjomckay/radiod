@@ -58,24 +58,25 @@ pub async fn fetch_metadata(country: &str, alias: &str) -> anyhow::Result<Metada
     let country = country.to_string();
     let alias = alias.to_string();
 
-    let scraper: ScraperResponse = tokio::task::spawn_blocking(move || -> anyhow::Result<ScraperResponse> {
-        let mut response = ureq::get(&url)
-            .call()
-            .context("failed to fetch now-playing metadata")?;
+    let scraper: ScraperResponse =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<ScraperResponse> {
+            let mut response = ureq::get(&url)
+                .call()
+                .context("failed to fetch now-playing metadata")?;
 
-        let status = response.status();
-        if !status.is_success() {
-            anyhow::bail!("scraper returned {} for {}.{}", status, country, alias);
-        }
+            let status = response.status();
+            if !status.is_success() {
+                anyhow::bail!("scraper returned {} for {}.{}", status, country, alias);
+            }
 
-        let scraper: ScraperResponse = response
-            .body_mut()
-            .read_json()
-            .context("failed to parse scraper JSON response")?;
+            let scraper: ScraperResponse = response
+                .body_mut()
+                .read_json()
+                .context("failed to parse scraper JSON response")?;
 
-        Ok(scraper)
-    })
-    .await??;
+            Ok(scraper)
+        })
+        .await??;
 
     Ok(parse_metadata(scraper))
 }
@@ -186,7 +187,10 @@ mod tests {
         )
         .unwrap();
         let result = parse_metadata(response);
-        assert_eq!(result.artist, "Fallback Title".split_once(" - ").map(|_| "").unwrap_or(""));
+        assert_eq!(
+            result.artist,
+            "Fallback Title".split_once(" - ").map(|_| "").unwrap_or("")
+        );
         assert_eq!(result.title, "Fallback Title");
     }
 

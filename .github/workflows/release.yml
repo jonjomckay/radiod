@@ -12,14 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v16
-        with:
-          name: devenv
-      - name: Install devenv.sh
-        run: nix profile add nixpkgs#devenv
+
+      - name: Install Rust components
+        run: rustup component add rustfmt clippy
+
+      - name: Install GStreamer build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev
+
       - name: Build release binaries
-        run: devenv shell cargo build --release
+        run: cargo build --release
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:

@@ -89,7 +89,10 @@ impl Control {
 
         let (old_uri, changed_tx) = {
             let state = self.state.read().await;
-            (state.current_station_uri.clone(), state.station_changed_tx.clone())
+            (
+                state.current_station_uri.clone(),
+                state.station_changed_tx.clone(),
+            )
         };
 
         let (_new_idx_or_none, needs_switch) = {
@@ -109,7 +112,7 @@ impl Control {
                     } else {
                         state.current_station_index = 0;
                         let new_uri = state.stations[0].uri.clone();
-                    state.current_station_uri = new_uri;
+                        state.current_station_uri = new_uri;
                         (None, true)
                     }
                 }
@@ -129,11 +132,7 @@ impl Control {
                     let _ = self.station_tx.send(station_uri).await;
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "control reload: failed to parse URI '{}': {}",
-                        new_uri,
-                        e
-                    );
+                    tracing::error!("control reload: failed to parse URI '{}': {}", new_uri, e);
                 }
             }
         } else {

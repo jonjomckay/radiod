@@ -35,6 +35,21 @@ pub fn run_player(
     initial_volume: f64,
 ) -> JoinHandle<()> {
     std::thread::spawn(move || {
+        macro_rules! require_element {
+            ($factory:expr, $name:expr) => {
+                match gstreamer::ElementFactory::make($factory).name($name).build() {
+                    Ok(elem) => elem,
+                    Err(e) => {
+                        let _ = event_tx.send(PlayerEvent::Error(format!(
+                            "GStreamer element '{}' not found. Is the required plugin installed? ({})",
+                            $factory, e
+                        )));
+                        return;
+                    }
+                }
+            };
+        }
+
         if let Err(e) = gstreamer::init() {
             let _ = event_tx.send(PlayerEvent::Error(format!(
                 "failed to initialise GStreamer: {}",
@@ -45,48 +60,64 @@ pub fn run_player(
 
         let pipeline = gstreamer::Pipeline::new();
 
-        let uridecodebin = gstreamer::ElementFactory::make("uridecodebin")
-            .name("uridecodebin")
-            .build()
-            .expect("failed to create uridecodebin");
+        let uridecodebin = require_element!("uridecodebin", "uridecodebin");
         uridecodebin.connect("source-setup", false, move |args| {
             if args.len() > 1 {
                 if let Ok(source) = args[1].get::<gstreamer::Element>() {
-                    let _ = source
-                        .set_property("user-agent", "Mozilla/5.0 (X11; Linux x86_64) radiod/1.0");
+                    source.set_property("user-agent", "Mozilla/5.0 (X11; Linux x86_64) radiod/1.0");
                 }
             }
             None
         });
-        let audioconvert = gstreamer::ElementFactory::make("audioconvert")
-            .name("audioconvert")
-            .build()
-            .expect("failed to create audioconvert");
-        let audioresample = gstreamer::ElementFactory::make("audioresample")
-            .name("audioresample")
-            .build()
-            .expect("failed to create audioresample");
-        let volume_elem = gstreamer::ElementFactory::make("volume")
-            .name("volume")
-            .build()
-            .expect("failed to create volume");
-        let audiosink = gstreamer::ElementFactory::make("autoaudiosink")
-            .name("audiosink")
-            .build()
-            .expect("failed to create autoaudiosink");
+        let audioconvert = require_element!("audioconvert", "audioconvert");
+        let audioresample = require_element!("audioresample", "audioresample");
+        let volume_elem = require_element!("volume", "volume");
+        let audiosink = require_element!("autoaudiosink", "audiosink");
 
-        pipeline
-            .add_many([
+        macro_rules! require {
+            ($result:expr, $msg:literal) => {
+                match $result {
+                    Ok(val) => val,
+                    Err(e) => {
+                        let _ = event_tx.send(PlayerEvent::Error(format!("{}: {}", $msg, e)));
+                        return;
+                    }
+                }
+            };
+        }
+
+        macro_rules! require_some {
+            ($option:expr, $msg:literal) => {
+                match $option {
+                    Some(val) => val,
+                    None => {
+                        let _ = event_tx.send(PlayerEvent::Error(format!("{}", $msg)));
+                        return;
+                    }
+                }
+            };
+        }
+
+        require!(
+            pipeline.add_many([
                 &uridecodebin,
                 &audioconvert,
                 &audioresample,
                 &volume_elem,
                 &audiosink,
-            ])
-            .expect("failed to add elements to pipeline");
+            ]),
+            "failed to add elements to pipeline"
+        );
 
-        gstreamer::Element::link_many([&audioconvert, &audioresample, &volume_elem, &audiosink])
-            .expect("failed to link audio chain");
+        require!(
+            gstreamer::Element::link_many([
+                &audioconvert,
+                &audioresample,
+                &volume_elem,
+                &audiosink
+            ]),
+            "failed to link audio chain"
+        );
 
         let audioconvert_weak = audioconvert.downgrade();
         uridecodebin.connect_pad_added(move |_dbin, src_pad| {
@@ -107,41 +138,49 @@ pub fn run_player(
             }
         });
 
-        let bus = pipeline.bus().expect("failed to get pipeline bus");
+        let bus = require_some!(pipeline.bus(), "failed to get pipeline bus");
         let event_tx_bus = event_tx.clone();
+        let event_tx_bus_inner = event_tx_bus.clone();
         let pipeline_ptr = pipeline.as_ptr() as usize;
-        let _bus_watch = bus
-            .add_watch(move |_, msg| {
-                use gstreamer::MessageView;
-                match msg.view() {
-                    MessageView::Eos(_) => {
-                        let _ = event_tx_bus.send(PlayerEvent::EndOfStream);
-                    }
-                    MessageView::Error(err) => {
-                        let _ = event_tx_bus.send(PlayerEvent::Error(format!(
-                            "{}: {}",
-                            err.error(),
-                            err.debug().unwrap_or_default()
-                        )));
-                    }
-                    MessageView::StateChanged(state) => {
-                        if let Some(src) = state.src() {
-                            if src.as_ptr() as usize == pipeline_ptr {
-                                let state = match state.current() {
-                                    gstreamer::State::Playing => PlaybackState::Playing,
-                                    gstreamer::State::Paused => PlaybackState::Paused,
-                                    gstreamer::State::Null => PlaybackState::Stopped,
-                                    _ => return gstreamer::glib::ControlFlow::Continue,
-                                };
-                                let _ = event_tx_bus.send(PlayerEvent::StateChanged(state));
-                            }
+        let _bus_watch = match bus.add_watch(move |_, msg| {
+            use gstreamer::MessageView;
+            match msg.view() {
+                MessageView::Eos(_) => {
+                    let _ = event_tx_bus_inner.send(PlayerEvent::EndOfStream);
+                }
+                MessageView::Error(err) => {
+                    let _ = event_tx_bus_inner.send(PlayerEvent::Error(format!(
+                        "{}: {}",
+                        err.error(),
+                        err.debug().unwrap_or_default()
+                    )));
+                }
+                MessageView::StateChanged(state) => {
+                    if let Some(src) = state.src() {
+                        if src.as_ptr() as usize == pipeline_ptr {
+                            let state = match state.current() {
+                                gstreamer::State::Playing => PlaybackState::Playing,
+                                gstreamer::State::Paused => PlaybackState::Paused,
+                                gstreamer::State::Null => PlaybackState::Stopped,
+                                _ => return gstreamer::glib::ControlFlow::Continue,
+                            };
+                            let _ = event_tx_bus_inner.send(PlayerEvent::StateChanged(state));
                         }
                     }
-                    _ => {}
                 }
-                gstreamer::glib::ControlFlow::Continue
-            })
-            .expect("failed to add bus watch");
+                _ => {}
+            }
+            gstreamer::glib::ControlFlow::Continue
+        }) {
+            Ok(watch) => watch,
+            Err(e) => {
+                let _ = event_tx_bus.send(PlayerEvent::Error(format!(
+                    "failed to add bus watch: {}",
+                    e
+                )));
+                return;
+            }
+        };
 
         let main_loop = gstreamer::glib::MainLoop::new(None, false);
         let main_context = main_loop.context();

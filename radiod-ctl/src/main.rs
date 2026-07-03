@@ -79,9 +79,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn connect() -> anyhow::Result<Connection> {
-    Connection::session().context(
-        "radiod daemon is not running. Start it with `systemctl --user start radiod`.",
-    )
+    Connection::session()
+        .context("radiod daemon is not running. Start it with `systemctl --user start radiod`.")
 }
 
 fn properties_proxy(conn: &Connection) -> anyhow::Result<PropertiesProxy<'_>> {

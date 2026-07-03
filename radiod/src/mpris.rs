@@ -222,8 +222,7 @@ impl MediaPlayer2Player {
         if state.stations.is_empty() {
             return;
         }
-        state.current_station_index =
-            (state.current_station_index + 1) % state.stations.len();
+        state.current_station_index = (state.current_station_index + 1) % state.stations.len();
         notify_station_change(&mut state, &self.station_tx).await;
     }
 
@@ -243,11 +242,7 @@ impl MediaPlayer2Player {
     }
 
     #[allow(unused_variables)]
-    async fn set_position(
-        &self,
-        track_id: ObjectPath<'_>,
-        position: i64,
-    ) {
+    async fn set_position(&self, track_id: ObjectPath<'_>, position: i64) {
         // no-op: CanSeek is false
     }
 
@@ -283,17 +278,20 @@ async fn notify_station_change(
             let _ = station_tx.send(station_uri).await;
         }
         Err(e) => {
-            tracing::error!("mpris: failed to parse station URI '{}': {}", station.uri, e);
+            tracing::error!(
+                "mpris: failed to parse station URI '{}': {}",
+                station.uri,
+                e
+            );
         }
     }
 }
 
 fn make_track_id(station_uri: &str, track_id: &str) -> String {
-    let station_part =
-        match StationUri::from_str(station_uri) {
-            Ok(StationUri::Orbox { country, alias }) => format!("{}_{}", country, alias),
-            _ => "unknown".to_string(),
-        };
+    let station_part = match StationUri::from_str(station_uri) {
+        Ok(StationUri::Orbox { country, alias }) => format!("{}_{}", country, alias),
+        _ => "unknown".to_string(),
+    };
     let ts = if track_id.is_empty() {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -314,12 +312,11 @@ fn make_metadata_dict(meta: &Metadata, station_uri: &str) -> HashMap<String, Val
 
     // mpris:trackid
     let track_id_path = make_track_id(station_uri, &meta.track_id);
-    let obj_path = ObjectPath::try_from(track_id_path)
-        .unwrap_or_else(|_| {
-            ObjectPath::from_string_unchecked(
-                "/org/mpris/MediaPlayer2/radiod/track/unknown".to_string(),
-            )
-        });
+    let obj_path = ObjectPath::try_from(track_id_path).unwrap_or_else(|_| {
+        ObjectPath::from_string_unchecked(
+            "/org/mpris/MediaPlayer2/radiod/track/unknown".to_string(),
+        )
+    });
     map.insert("mpris:trackid".to_string(), Value::ObjectPath(obj_path));
 
     // xesam:title
@@ -335,7 +332,10 @@ fn make_metadata_dict(meta: &Metadata, station_uri: &str) -> HashMap<String, Val
 
     // mpris:artUrl
     if !meta.art_url.is_empty() {
-        map.insert("mpris:artUrl".to_string(), Value::from(meta.art_url.clone()));
+        map.insert(
+            "mpris:artUrl".to_string(),
+            Value::from(meta.art_url.clone()),
+        );
     }
 
     // xesam:album

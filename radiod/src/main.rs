@@ -1,6 +1,9 @@
 use std::str::FromStr;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc, Mutex,
+};
 use std::time::Duration;
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU32, Ordering}};
 
 use anyhow::Context;
 
@@ -11,12 +14,12 @@ mod config;
 mod config_watcher;
 mod control;
 mod metadata;
+mod mpris;
 mod orbox;
 mod player;
 mod station;
-mod mpris;
 
-use player::{PlayerCommand, PlayerEvent, PlaybackState};
+use player::{PlaybackState, PlayerCommand, PlayerEvent};
 use station::StationUri;
 
 async fn retry_playback(
@@ -29,7 +32,11 @@ async fn retry_playback(
     let count = retry_cnt.fetch_add(1, Ordering::Relaxed);
     let max_retries: u32 = 10;
     if count >= max_retries {
-        tracing::error!("{}: max retries ({}) reached, giving up", reason, max_retries);
+        tracing::error!(
+            "{}: max retries ({}) reached, giving up",
+            reason,
+            max_retries
+        );
         retrying.store(false, Ordering::Release);
         return;
     }
@@ -37,7 +44,13 @@ async fn retry_playback(
         Duration::from_secs(2_u64.saturating_pow(count)),
         Duration::from_secs(60),
     );
-    tracing::info!("{}: retrying in {:?} (attempt {}/{})", reason, delay, count + 1, max_retries);
+    tracing::info!(
+        "{}: retrying in {:?} (attempt {}/{})",
+        reason,
+        delay,
+        count + 1,
+        max_retries
+    );
     tokio::time::sleep(delay).await;
 
     if let Some(ref uri_str) = station {
@@ -50,7 +63,12 @@ async fn retry_playback(
                             Some(url)
                         }
                         Err(e) => {
-                            tracing::error!("retry resolve failed for {}/{}: {}", country, alias, e);
+                            tracing::error!(
+                                "retry resolve failed for {}/{}: {}",
+                                country,
+                                alias,
+                                e
+                            );
                             None
                         }
                     }
@@ -69,8 +87,7 @@ async fn retry_playback(
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
@@ -85,14 +102,12 @@ async fn main() -> anyhow::Result<()> {
 
     let poll_interval = Duration::from_secs(cfg.daemon.metadata_poll_interval_secs);
 
-    let initial_uri_str = cfg
-        .daemon
-        .default_station
-        .as_ref()
-        .and_then(|uri_str| {
-            let station = cfg.stations.iter().find(|s| s.uri == *uri_str)?;
-            StationUri::from_str(&station.uri).ok().map(|u| u.to_string())
-        });
+    let initial_uri_str = cfg.daemon.default_station.as_ref().and_then(|uri_str| {
+        let station = cfg.stations.iter().find(|s| s.uri == *uri_str)?;
+        StationUri::from_str(&station.uri)
+            .ok()
+            .map(|u| u.to_string())
+    });
 
     let mut poll_handle: Option<tokio::task::JoinHandle<()>> = None;
 
@@ -100,11 +115,7 @@ async fn main() -> anyhow::Result<()> {
         let station_uri = StationUri::from_str(uri_str)?;
         match &station_uri {
             StationUri::Orbox { country, alias } => {
-                tracing::info!(
-                    "resolving stream URL for orbox:{}/{}",
-                    country,
-                    alias
-                );
+                tracing::info!("resolving stream URL for orbox:{}/{}", country, alias);
                 match orbox::resolve_stream_url(country, alias).await {
                     Ok(stream_url) => {
                         tracing::info!(
@@ -147,12 +158,8 @@ async fn main() -> anyhow::Result<()> {
     let retry_count = Arc::new(AtomicU32::new(0));
     let is_retrying = Arc::new(AtomicBool::new(false));
 
-    let player_handle = player::run_player(
-        cmd_rx,
-        event_tx,
-        resolved_initial_uri,
-        cfg.daemon.volume,
-    );
+    let player_handle =
+        player::run_player(cmd_rx, event_tx, resolved_initial_uri, cfg.daemon.volume);
 
     let (quit_tx, mut quit_rx) = watch::channel(false);
 

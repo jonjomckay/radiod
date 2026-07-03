@@ -95,8 +95,33 @@ install_files() {
     systemctl --user daemon-reload
 }
 
+check_dependencies() {
+    if command -v gst-inspect-1.0 &>/dev/null && \
+       gst-inspect-1.0 uridecodebin &>/dev/null; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${RED}Warning: GStreamer plugins not found.${NC}"
+    echo "GStreamer is required for audio playback. Install the missing packages:"
+    echo ""
+
+    if command -v pacman &>/dev/null; then
+        echo "  sudo pacman -S gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly"
+    elif command -v apt &>/dev/null; then
+        echo "  sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly"
+    elif command -v dnf &>/dev/null; then
+        echo "  sudo dnf install gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free gstreamer1-plugins-ugly-free"
+    elif command -v zypper &>/dev/null; then
+        echo "  sudo zypper install gstreamer-plugins-base gstreamer-plugins-good gstreamer-plugins-bad gstreamer-plugins-ugly"
+    else
+        echo "  Required: gstreamer, gst-plugins-base, gst-plugins-good, gst-plugins-bad, gst-plugins-ugly"
+    fi
+}
+
 install_binaries "$@"
 install_files
+check_dependencies
 
 echo ""
 echo -e "${GREEN}Installation complete.${NC}"
