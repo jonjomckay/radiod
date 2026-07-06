@@ -18,6 +18,11 @@ NC='\033[0m'
 install_binaries() {
     mkdir -p "$BIN_DIR"
 
+    if systemctl --user is-active --quiet radiod 2>/dev/null; then
+        echo "Stopping radiod before updating binary..."
+        systemctl --user stop radiod
+    fi
+
     local mode="${1:-latest}"
 
     if [ "$mode" = "--build" ]; then
@@ -33,11 +38,13 @@ install_binaries() {
 
     if [ "$version" = "latest" ]; then
         base_url="https://github.com/${REPO}/releases/latest/download"
+        version=$(curl -sS "https://api.github.com/repos/${REPO}/releases/latest" \
+            | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4 || echo "latest")
     else
         base_url="https://github.com/${REPO}/releases/download/${version}"
     fi
 
-    echo "Downloading radiod..."
+    echo "Downloading radiod (${version})..."
     if ! curl -fsSL "${base_url}/radiod" -o "${BIN_DIR}/radiod"; then
         echo -e "${RED}Failed to download radiod${NC}"
         exit 1
