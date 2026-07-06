@@ -2,6 +2,22 @@ use std::thread::JoinHandle;
 
 use gstreamer::prelude::*;
 
+/// GStreamer playbin flags bitmask (GstPlayFlags).
+/// Defined in gst-plugins-base but not auto-generated in gstreamer-rs.
+mod gst_play_flags {
+    #![allow(dead_code)]
+    pub const VIDEO: u32 = 0x01;
+    pub const AUDIO: u32 = 0x02;
+    pub const TEXT: u32 = 0x04;
+    pub const VIS: u32 = 0x08;
+    pub const SOFT_VOLUME: u32 = 0x10;
+    pub const NATIVE_AUDIO: u32 = 0x20;
+    pub const NATIVE_VIDEO: u32 = 0x40;
+    pub const DOWNLOAD: u32 = 0x80;
+    pub const BUFFERING: u32 = 0x100;
+    pub const DEINTERLACE: u32 = 0x200;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackState {
     Playing,
@@ -50,42 +66,6 @@ pub fn run_player(
             };
         }
 
-        if let Err(e) = gstreamer::init() {
-            let _ = event_tx.send(PlayerEvent::Error(format!(
-                "failed to initialise GStreamer: {}",
-                e
-            )));
-            return;
-        }
-
-        let pipeline = gstreamer::Pipeline::new();
-
-        let uridecodebin = require_element!("uridecodebin", "uridecodebin");
-        uridecodebin.connect("source-setup", false, move |args| {
-            if args.len() > 1 {
-                if let Ok(source) = args[1].get::<gstreamer::Element>() {
-                    source.set_property("user-agent", "Mozilla/5.0 (X11; Linux x86_64) radiod/1.0");
-                }
-            }
-            None
-        });
-        let audioconvert = require_element!("audioconvert", "audioconvert");
-        let audioresample = require_element!("audioresample", "audioresample");
-        let volume_elem = require_element!("volume", "volume");
-        let audiosink = require_element!("autoaudiosink", "audiosink");
-
-        macro_rules! require {
-            ($result:expr, $msg:literal) => {
-                match $result {
-                    Ok(val) => val,
-                    Err(e) => {
-                        let _ = event_tx.send(PlayerEvent::Error(format!("{}: {}", $msg, e)));
-                        return;
-                    }
-                }
-            };
-        }
-
         macro_rules! require_some {
             ($option:expr, $msg:literal) => {
                 match $option {
@@ -98,50 +78,32 @@ pub fn run_player(
             };
         }
 
-        require!(
-            pipeline.add_many([
-                &uridecodebin,
-                &audioconvert,
-                &audioresample,
-                &volume_elem,
-                &audiosink,
-            ]),
-            "failed to add elements to pipeline"
-        );
+        if let Err(e) = gstreamer::init() {
+            let _ = event_tx.send(PlayerEvent::Error(format!(
+                "failed to initialise GStreamer: {}",
+                e
+            )));
+            return;
+        }
 
-        require!(
-            gstreamer::Element::link_many([
-                &audioconvert,
-                &audioresample,
-                &volume_elem,
-                &audiosink
-            ]),
-            "failed to link audio chain"
-        );
+        let pipeline = require_element!("playbin", "playbin");
 
-        let audioconvert_weak = audioconvert.downgrade();
-        uridecodebin.connect_pad_added(move |_dbin, src_pad| {
-            let caps = src_pad.current_caps();
-            let Some(caps) = caps else { return };
-            let Some(s) = caps.structure(0) else { return };
-            if !s.name().starts_with("audio/") {
-                return;
+        pipeline.set_property("flags", gst_play_flags::AUDIO);
+
+        pipeline.connect("source-setup", false, move |args| {
+            if args.len() > 1 {
+                if let Ok(source) = args[1].get::<gstreamer::Element>() {
+                    source.set_property("user-agent", "Mozilla/5.0 (X11; Linux x86_64) radiod/1.0");
+                }
             }
-            let Some(audioconvert) = audioconvert_weak.upgrade() else {
-                return;
-            };
-            let sink_pad = audioconvert
-                .static_pad("sink")
-                .expect("audioconvert has no sink pad");
-            if src_pad.link(&sink_pad).is_err() {
-                tracing::warn!("failed to link uridecodebin pad");
-            }
+            None
         });
 
         let bus = require_some!(pipeline.bus(), "failed to get pipeline bus");
         let event_tx_bus = event_tx.clone();
         let event_tx_bus_inner = event_tx_bus.clone();
         let pipeline_ptr = pipeline.as_ptr() as usize;
+        let pipeline_for_clock = pipeline.clone();
         let _bus_watch = match bus.add_watch(move |_, msg| {
             use gstreamer::MessageView;
             match msg.view() {
@@ -168,6 +130,17 @@ pub fn run_player(
                         }
                     }
                 }
+                MessageView::Buffering(buffering) => {
+                    let percent = buffering.percent();
+                    if percent < 100 {
+                        tracing::debug!("buffering: {}%", percent);
+                    }
+                }
+                MessageView::ClockLost(_) => {
+                    tracing::debug!("clock lost, re-syncing...");
+                    let _ = pipeline_for_clock.set_state(gstreamer::State::Paused);
+                    let _ = pipeline_for_clock.set_state(gstreamer::State::Playing);
+                }
                 _ => {}
             }
             gstreamer::glib::ControlFlow::Continue
@@ -187,8 +160,6 @@ pub fn run_player(
         let main_context_cmd = main_context.clone();
 
         let pipeline_cmd = pipeline.clone();
-        let uridecodebin_cmd = uridecodebin.clone();
-        let volume_cmd = volume_elem.clone();
         let main_loop_cmd = main_loop.clone();
         let event_tx_cmd = event_tx.clone();
 
@@ -196,8 +167,6 @@ pub fn run_player(
             while let Ok(cmd) = cmd_rx.recv() {
                 let is_quit = matches!(cmd, PlayerCommand::Quit);
                 let pipeline = pipeline_cmd.clone();
-                let uridecodebin = uridecodebin_cmd.clone();
-                let volume = volume_cmd.clone();
                 let event_tx = event_tx_cmd.clone();
                 let main_loop = main_loop_cmd.clone();
 
@@ -212,13 +181,13 @@ pub fn run_player(
                         let _ = pipeline.set_state(gstreamer::State::Null);
                     }
                     PlayerCommand::SetVolume(vol) => {
-                        volume.set_property("volume", vol);
+                        pipeline.set_property("volume", vol);
                         let _ = event_tx.send(PlayerEvent::VolumeChanged(vol));
                     }
                     PlayerCommand::SetUri(uri) => {
                         tracing::info!("setting URI: {}", uri);
                         let _ = pipeline.set_state(gstreamer::State::Null);
-                        uridecodebin.set_property("uri", &uri);
+                        pipeline.set_property("uri", &uri);
                         let _ = pipeline.set_state(gstreamer::State::Playing);
                     }
                     PlayerCommand::Quit => {
@@ -234,21 +203,21 @@ pub fn run_player(
         });
 
         main_context.invoke({
-            let volume = volume_elem.clone();
+            let pipeline = pipeline.clone();
             let event_tx = event_tx.clone();
             move || {
-                volume.set_property("volume", initial_volume);
+                pipeline.set_property("volume", initial_volume);
                 let _ = event_tx.send(PlayerEvent::VolumeChanged(initial_volume));
             }
         });
+
         if let Some(uri) = initial_uri {
             main_context.invoke({
                 let pipeline = pipeline.clone();
-                let uridecodebin = uridecodebin.clone();
                 move || {
                     tracing::info!("setting initial URI: {}", &uri);
                     let _ = pipeline.set_state(gstreamer::State::Null);
-                    uridecodebin.set_property("uri", &uri);
+                    pipeline.set_property("uri", &uri);
                     let _ = pipeline.set_state(gstreamer::State::Playing);
                 }
             });
