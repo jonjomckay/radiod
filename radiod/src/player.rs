@@ -2,20 +2,26 @@ use std::thread::JoinHandle;
 
 use gstreamer::prelude::*;
 
-/// GStreamer playbin flags bitmask (GstPlayFlags).
-/// Defined in gst-plugins-base but not auto-generated in gstreamer-rs.
-mod gst_play_flags {
-    #![allow(dead_code)]
-    pub const VIDEO: u32 = 0x01;
-    pub const AUDIO: u32 = 0x02;
-    pub const TEXT: u32 = 0x04;
-    pub const VIS: u32 = 0x08;
-    pub const SOFT_VOLUME: u32 = 0x10;
-    pub const NATIVE_AUDIO: u32 = 0x20;
-    pub const NATIVE_VIDEO: u32 = 0x40;
-    pub const DOWNLOAD: u32 = 0x80;
-    pub const BUFFERING: u32 = 0x100;
-    pub const DEINTERLACE: u32 = 0x200;
+/// Returns a flags value for playbin's `flags` property set to audio-only.
+///
+/// `set_property` with a plain integer creates a `guint` GLib value, but
+/// playbin's `flags` property expects the `GstPlayFlags` GLib flags type.
+/// `glib::FlagsValue` provides the correct type ID so GObject property
+/// validation passes.
+fn playbin_flags_audio_only() -> gstreamer::glib::Value {
+    use gstreamer::glib::{self, translate::ToGlibPtrMut};
+
+    static FLAGS_TYPE: std::sync::OnceLock<glib::Type> = std::sync::OnceLock::new();
+    let flags_type = *FLAGS_TYPE.get_or_init(|| {
+        glib::Type::from_name("GstPlayFlags")
+            .expect("GstPlayFlags type not registered; is gst-plugins-base installed?")
+    });
+
+    let mut value = glib::Value::from_type(flags_type);
+    unsafe {
+        glib::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, 0x02);
+    }
+    value
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,7 +94,7 @@ pub fn run_player(
 
         let pipeline = require_element!("playbin", "playbin");
 
-        pipeline.set_property("flags", gst_play_flags::AUDIO);
+        pipeline.set_property("flags", playbin_flags_audio_only());
 
         pipeline.connect("source-setup", false, move |args| {
             if args.len() > 1 {
