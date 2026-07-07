@@ -16,12 +16,10 @@ jobs:
       - name: Install Rust components
         run: rustup component add rustfmt clippy
 
-      - name: Install GStreamer build dependencies
+      - name: Install mpv build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev
+          sudo apt-get install -y libmpv-dev
 
       - name: Build release binaries
         run: cargo build --release

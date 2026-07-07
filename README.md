@@ -18,7 +18,7 @@ cd radiod
 ./install.sh --build     # build from source
 ```
 
-> **Requires:** GStreamer runtime (`gstreamer`, `gst-plugins-base`, `gst-plugins-good`, `gst-plugins-bad`, `gst-plugins-ugly`).
+> **Requires:** mpv runtime (provides `libmpv.so`). On Arch: `pacman -S mpv`. On Debian/Ubuntu: `apt install mpv libmpv-dev`.
 
 ## Configuration
 
@@ -50,7 +50,7 @@ A commented example is at `config.example.toml` in the repo.
 | Scheme | Format | Description |
 |--------|--------|-------------|
 | `orbox:` | `orbox:<country>/<alias>` | Resolved to a stream URL via the Online Radio Box API |
-| `direct:` | `direct:<url>` | Passed directly to GStreamer |
+| `direct:` | `direct:<url>` | Passed directly to mpv for playback |
 
 ## Usage
 
@@ -111,7 +111,7 @@ Config and data directories (`~/.config/radiod`, `~/.local/share/radiod`) can be
 
 | Crate | Description |
 |-------|-------------|
-| `radiod` | GStreamer-based audio daemon |
+| `radiod` | mpv-based audio daemon |
 | `radiod-ctl` | CLI control tool |
 
 ## License
