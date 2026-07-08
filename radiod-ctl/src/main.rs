@@ -152,7 +152,7 @@ fn cmd_now_playing(conn: &Connection, player_iface: &InterfaceName<'_>) -> anyho
 
 fn extract_string(map: &HashMap<String, OwnedValue>, key: &str) -> String {
     map.get(key)
-        .and_then(|v| v.downcast_ref::<String>().ok().map(|s| s.clone()))
+        .and_then(|v| v.downcast_ref::<String>().ok())
         .unwrap_or_default()
 }
 
@@ -211,7 +211,7 @@ fn cmd_list_stations(conn: &Connection) -> anyhow::Result<()> {
         .max(4);
 
     println!("{:<name_width$}  URI", "Name", name_width = name_width);
-    println!("{:-<name_width$}  {}", "", "---", name_width = name_width);
+    println!("{:-<name_width$}  ---", "", name_width = name_width);
 
     for (name, uri) in &stations {
         let marker = if uri == &current.1 { "*" } else { " " };

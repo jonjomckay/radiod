@@ -118,6 +118,9 @@ pub fn run_player(
                     Event::EndFile(0) => {
                         let _ = event_tx.send(PlayerEvent::EndOfStream);
                     }
+                    Event::EndFile(1) => {
+                        let _ = event_tx.send(PlayerEvent::StateChanged(PlaybackState::Stopped));
+                    }
                     Event::EndFile(3) => {
                         let _ = event_tx.send(PlayerEvent::Error("playback error".into()));
                     }

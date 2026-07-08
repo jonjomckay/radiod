@@ -57,7 +57,7 @@ pub fn spawn(path: impl AsRef<Path>) -> mpsc::Receiver<anyhow::Result<Config>> {
         for res in debounce_rx {
             match res {
                 Ok(events) => {
-                    let relevant = filename.as_ref().map_or(true, |fname| {
+                    let relevant = filename.as_ref().is_none_or(|fname| {
                         events
                             .iter()
                             .any(|e| e.path.file_name() == Some(fname.as_os_str()))

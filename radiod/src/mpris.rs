@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use tokio::sync::{broadcast, watch, RwLock};
-use tracing;
 use zbus::connection;
 use zbus::interface;
 use zbus::zvariant::{ObjectPath, Value};
@@ -31,6 +30,7 @@ struct MediaPlayer2Player {
     state: Arc<RwLock<MprisState>>,
     cmd_tx: std::sync::mpsc::Sender<PlayerCommand>,
     station_tx: tokio::sync::mpsc::Sender<StationUri>,
+    stop_event_tx: tokio::sync::mpsc::UnboundedSender<()>,
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +214,11 @@ impl MediaPlayer2Player {
     }
 
     async fn stop(&self) {
+        {
+            let mut s = self.state.write().await;
+            apply_player_event(&mut s, &PlayerEvent::StateChanged(PlaybackState::Stopped));
+        }
+        let _ = self.stop_event_tx.send(());
         let _ = self.cmd_tx.send(PlayerCommand::Stop);
     }
 
@@ -348,10 +353,28 @@ fn make_metadata_dict(meta: &Metadata, station_uri: &str) -> HashMap<String, Val
     map
 }
 
+/// Applies a PlayerEvent to MprisState. When the state transitions to Stopped,
+/// metadata is cleared per the MPRIS spec ("Metadata map SHOULD be empty").
+pub(crate) fn apply_player_event(state: &mut MprisState, event: &PlayerEvent) {
+    match event {
+        PlayerEvent::StateChanged(new_state) => {
+            state.playback_status = *new_state;
+            if *new_state == PlaybackState::Stopped {
+                state.metadata = Metadata::default();
+            }
+        }
+        PlayerEvent::VolumeChanged(vol) => {
+            state.volume = *vol;
+        }
+        _ => {}
+    }
+}
+
 // ---------------------------------------------------------------------------
 // public entrypoint
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_mpris(
     cmd_tx: std::sync::mpsc::Sender<PlayerCommand>,
     event_tx: broadcast::Sender<PlayerEvent>,
@@ -397,10 +420,12 @@ pub async fn run_mpris(
     let station_tx_for_reload = station_tx.clone();
     let cmd_tx_for_reload = cmd_tx.clone();
     let station_tx_for_player = station_tx.clone();
+    let (stop_event_tx, mut stop_event_rx) = tokio::sync::mpsc::unbounded_channel();
     let media_player2_player = MediaPlayer2Player {
         state: state.clone(),
         cmd_tx,
         station_tx: station_tx_for_player,
+        stop_event_tx,
     };
 
     let control = crate::control::Control {
@@ -428,15 +453,40 @@ pub async fn run_mpris(
                 break;
             }
 
+            _ = stop_event_rx.recv() => {
+                emit_player_prop_changed(&object_server, "PlaybackStatus").await;
+                emit_player_prop_changed(&object_server, "Metadata").await;
+            }
+
             event = event_rx.recv() => {
                 match event {
-                    Ok(PlayerEvent::StateChanged(new_state)) => {
-                        state.write().await.playback_status = new_state;
-                        emit_player_prop_changed(&object_server, "PlaybackStatus").await;
-                    }
-                    Ok(PlayerEvent::VolumeChanged(vol)) => {
-                        state.write().await.volume = vol;
-                        emit_player_prop_changed(&object_server, "Volume").await;
+                    Ok(event)
+                        if matches!(event, PlayerEvent::StateChanged(_)
+                                      | PlayerEvent::VolumeChanged(_)) =>
+                    {
+                        let need_emit_metadata;
+                        {
+                            let mut s = state.write().await;
+                            let prev_was_not_stopped =
+                                s.playback_status != PlaybackState::Stopped;
+                            apply_player_event(&mut s, &event);
+                            need_emit_metadata = matches!(
+                                event,
+                                PlayerEvent::StateChanged(PlaybackState::Stopped)
+                            ) && prev_was_not_stopped;
+                        }
+                        match &event {
+                            PlayerEvent::StateChanged(_) => {
+                                emit_player_prop_changed(&object_server, "PlaybackStatus").await;
+                            }
+                            PlayerEvent::VolumeChanged(_) => {
+                                emit_player_prop_changed(&object_server, "Volume").await;
+                            }
+                            _ => {}
+                        }
+                        if need_emit_metadata {
+                            emit_player_prop_changed(&object_server, "Metadata").await;
+                        }
                     }
                     Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -573,4 +623,80 @@ async fn emit_control_prop_changed(
         "Stations" => iface_ref.get().await.stations_changed(emitter).await,
         _ => Ok(()),
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::player::PlaybackState;
+
+    fn test_state() -> MprisState {
+        MprisState {
+            playback_status: PlaybackState::Playing,
+            volume: 0.5,
+            metadata: Metadata {
+                title: "Test Song".into(),
+                artist: "Test Artist".into(),
+                ..Metadata::default()
+            },
+            stations: vec![],
+            current_station_index: 0,
+            current_station_uri: "orbox:uk/bbcradio1".into(),
+            station_changed_tx: broadcast::channel(1).0,
+        }
+    }
+
+    #[test]
+    fn stopped_clears_metadata() {
+        let mut state = test_state();
+        assert_eq!(state.metadata.title, "Test Song");
+        assert_eq!(state.metadata.artist, "Test Artist");
+
+        apply_player_event(&mut state, &PlayerEvent::StateChanged(PlaybackState::Stopped));
+
+        assert_eq!(state.playback_status, PlaybackState::Stopped);
+        assert!(state.metadata.title.is_empty());
+        assert!(state.metadata.artist.is_empty());
+    }
+
+    #[test]
+    fn paused_preserves_metadata() {
+        let mut state = test_state();
+
+        apply_player_event(&mut state, &PlayerEvent::StateChanged(PlaybackState::Paused));
+
+        assert_eq!(state.playback_status, PlaybackState::Paused);
+        assert_eq!(state.metadata.title, "Test Song");
+        assert_eq!(state.metadata.artist, "Test Artist");
+    }
+
+    #[test]
+    fn playing_preserves_metadata() {
+        let mut state = test_state();
+        state.playback_status = PlaybackState::Stopped;
+        let saved = state.metadata.clone();
+
+        apply_player_event(&mut state, &PlayerEvent::StateChanged(PlaybackState::Playing));
+
+        assert_eq!(state.playback_status, PlaybackState::Playing);
+        assert_eq!(state.metadata.title, saved.title);
+    }
+
+    #[test]
+    fn volume_changed_updates_volume() {
+        let mut state = test_state();
+
+        apply_player_event(&mut state, &PlayerEvent::VolumeChanged(0.75));
+
+        assert!((state.volume - 0.75).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn volume_changed_does_not_alter_playback_status() {
+        let mut state = test_state();
+
+        apply_player_event(&mut state, &PlayerEvent::VolumeChanged(0.1));
+
+        assert_eq!(state.playback_status, PlaybackState::Playing);
+    }
 }
